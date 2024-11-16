@@ -7,15 +7,9 @@ import (
 	"time"
 )
 
-var L Log
+var L Logger
 
-type Logger interface {
-	Info(msg ...string)
-	Warn(msg ...string)
-	Error(msg ...string)
-}
-
-type Log struct {
+type Logger struct {
 	l *log.Logger
 }
 
@@ -26,7 +20,7 @@ func Init() {
 	}
 
 	l := log.New(os.Stdout, "", 0)
-	L = Log{l}
+	L = Logger{l}
 
 	// ===========================================
 	// NO LOGGING ABOVE THIS LINE
@@ -35,21 +29,21 @@ func Init() {
 	L.Info("Logging initialized...")
 }
 
-func (L Log) Info(msg ...string) {
+func (L Logger) Info(msg ...string) {
 	if len(msg) == 0 {
 		return
 	}
 
 	L.print("[ERROR]", msg...)
 }
-func (L Log) Warn(msg ...string) {
+func (L Logger) Warn(msg ...string) {
 	if len(msg) == 0 {
 		return
 	}
 
 	L.print("[ERROR]", msg...)
 }
-func (L Log) Error(msg ...string) {
+func (L Logger) Error(msg ...string) {
 	if len(msg) == 0 {
 		return
 	}
@@ -57,7 +51,7 @@ func (L Log) Error(msg ...string) {
 	L.print("[ERROR]", msg...)
 }
 
-func (L Log) print(lvl string, msg ...string) {
+func (L Logger) print(lvl string, msg ...string) {
 	if L.l == nil {
 		panic("uninitialized logger")
 	}
