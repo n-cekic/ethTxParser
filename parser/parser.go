@@ -26,6 +26,7 @@ type Transaction struct {
 	To          string `json:"to,omitempty"`          // Recipient address
 	Value       string `json:"value,omitempty"`       // Amount transferred in Wei (string for large values)
 	BlockNumber int    `json:"blockNumber,omitempty"` // Block number in which the transaction was included
+	// ...and so on...
 }
 
 type Block struct {
@@ -36,16 +37,19 @@ type Block struct {
 
 type BlockParser struct {
 	currentBlock  int
+	parseInterval time.Duration
+	rpcURL        string // URL of the Ethereum JSON-RPC endpoint
 	observedAddrs map[string]struct{}
 	transactions  map[string][]Transaction
 	mu            sync.Mutex
-	rpcURL        string // URL of the Ethereum JSON-RPC endpoint
 }
 
 // NewBlockParser creates a new instance of BlockParser.
-func NewBlockParser(rpcURL string) *BlockParser {
+func NewBlockParser(rpcURL string, parseInterval time.Duration) *BlockParser {
+	L.L.Info("Creating new BlocParser")
 	return &BlockParser{
 		currentBlock:  -1,
+		parseInterval: parseInterval,
 		observedAddrs: make(map[string]struct{}),
 		transactions:  make(map[string][]Transaction),
 		rpcURL:        rpcURL,
@@ -57,6 +61,7 @@ func NewBlockParser(rpcURL string) *BlockParser {
 func (bp *BlockParser) GetCurrentBlock() int {
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
+	L.L.Info("GetCurrentBlock:", fmt.Sprintf("0x%x", bp.currentBlock))
 	return bp.currentBlock
 }
 
@@ -65,9 +70,11 @@ func (bp *BlockParser) Subscribe(address string) bool {
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
 	if _, exists := bp.observedAddrs[address]; exists {
+		L.L.Warn("Address", address, "is already subscribed")
 		return false
 	}
 	bp.observedAddrs[address] = struct{}{}
+	L.L.Info("Address", address, "is now subscribed")
 	return true
 }
 
@@ -75,12 +82,13 @@ func (bp *BlockParser) Subscribe(address string) bool {
 func (bp *BlockParser) GetTransactions(address string) []Transaction {
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
+	L.L.Info("Getting transactions for:", address)
 	return bp.transactions[address]
 }
 
 func (bp *BlockParser) SynchronizeBlocks() {
 	for {
-		time.Sleep(time.Second)
+		time.Sleep(bp.parseInterval)
 		//get latest block data
 		latestBlockData, err := bp.getLatestBlock()
 		if err != nil {
@@ -102,7 +110,7 @@ func (bp *BlockParser) SynchronizeBlocks() {
 		if currentBlock != -1 {
 			blockData, err := bp.getBlockByNumber(currentBlock)
 			if err != nil {
-				L.L.Error("Failed fetching block:", fmt.Sprintf("%d", currentBlock), "Error:", err.Error())
+				L.L.Error("Failed fetching block:", fmt.Sprintf("0x%x", currentBlock), "Error:", err.Error())
 				continue
 			}
 
@@ -126,9 +134,10 @@ func (bp *BlockParser) SynchronizeBlocks() {
 		// Update the current block
 		latestBlockNoHex, ok := latestBlockData["number"].(string)
 		if !ok {
-			L.L.Error("Failed casting latest block number to string", fmt.Sprintf("%v", latestBlockNoHex))
+			L.L.Error("Failed casting latest block number to string", latestBlockNoHex)
 			continue
 		}
+
 		var latestBlockNo int
 		fmt.Sscanf(latestBlockNoHex, "0x%x", &latestBlockNo)
 		bp.mu.Lock()
@@ -147,10 +156,10 @@ func (bp *BlockParser) getLatestBlock() (map[string]interface{}, error) {
 	}
 
 	if blockNumber == bp.GetCurrentBlock() {
-		L.L.Info("No new blocks...")
+		L.L.Debug("No new blocks...")
 		return nil, nil
 	}
-	L.L.Info("New block", fmt.Sprintf("%d", blockNumber))
+	L.L.Info("Got latest block:", fmt.Sprintf("0x%x", blockNumber))
 
 	blockData, err := bp.getBlockByNumber(blockNumber)
 	if err != nil {
@@ -173,11 +182,15 @@ func (bp *BlockParser) getBlockNumber() (int, error) {
 		return 0, err
 	}
 
+	L.L.Debug("URL:", bp.rpcURL, "Request data:", fmt.Sprintf("%v", requestData))
+
 	resp, err := http.Post(bp.rpcURL, "application/json", bytes.NewReader(requestData))
 	if err != nil {
 		return 0, err
 	}
 	defer resp.Body.Close()
+
+	L.L.Debug("Response:", fmt.Sprintf("%v", resp))
 
 	var response map[string]interface{}
 	decoder := json.NewDecoder(resp.Body)
@@ -194,6 +207,8 @@ func (bp *BlockParser) getBlockNumber() (int, error) {
 
 	var blockNo int
 	fmt.Sscanf(blockHexNumber, "0x%x", &blockNo)
+
+	L.L.Info("New block number:", blockHexNumber, fmt.Sprintf("(int)%d", blockNo))
 	return blockNo, nil
 }
 
@@ -203,14 +218,17 @@ func (bp *BlockParser) getBlockByNumber(blockNumber int) (map[string]interface{}
 	requestBody := map[string]interface{}{
 		"jsonrpc": "2.0",
 		"method":  "eth_getBlockByNumber",
-		"params":  []interface{}{hexBlockNumber, true}, // true fetches full transaction objects
+		"params":  []interface{}{hexBlockNumber, true}, // true is needed to fetches full transaction objects (from, to, gas...)
 		"id":      1,
 	}
+	// NOTE: hexBlockNumber could be fixed to `latest` for latest block
 
 	requestData, err := json.Marshal(requestBody)
 	if err != nil {
 		return nil, err
 	}
+
+	L.L.Debug("URL:", bp.rpcURL, "Request data:", fmt.Sprintf("%v", requestData))
 
 	resp, err := http.Post(bp.rpcURL, "application/json", bytes.NewReader(requestData))
 	if err != nil {
@@ -218,26 +236,37 @@ func (bp *BlockParser) getBlockByNumber(blockNumber int) (map[string]interface{}
 	}
 	defer resp.Body.Close()
 
-	var response map[string]interface{}
+	L.L.Debug("Response:", fmt.Sprintf("%v", resp))
+
+	var block map[string]interface{}
 	decoder := json.NewDecoder(resp.Body)
-	err = decoder.Decode(&response)
+	err = decoder.Decode(&block)
 	if err != nil {
 		L.L.Error("fetchBlock: failed decoding response body", err.Error())
 		return nil, err
 	}
 
 	// Check for errors in the response
-	if result, ok := response["result"].(map[string]interface{}); ok {
-		return result, nil
+	result, ok := block["result"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid response: %v", block)
 	}
 
-	return nil, fmt.Errorf("invalid response: %v", response)
+	return result, nil
 }
 
 // processBlockTransactions processes transactions in a block and stores relevant ones.
 func (bp *BlockParser) processBlockTransactions(blockData map[string]interface{}) {
-	transactions, ok := blockData["transactions"].([]interface{})
+
+	result, ok := blockData["result"].(map[string]interface{})
 	if !ok {
+		L.L.Error("Failed parsing block data result field")
+		return
+	}
+
+	transactions, ok := result["transactions"].([]interface{})
+	if !ok {
+		L.L.Error("Failed parsing block.result transactions field")
 		return
 	}
 
@@ -266,9 +295,11 @@ func (bp *BlockParser) processBlockTransactions(blockData map[string]interface{}
 
 		bp.mu.Lock()
 		if _, isObserved := bp.observedAddrs[from]; isObserved {
+			L.L.Info("New transaction for", from)
 			bp.transactions[from] = append(bp.transactions[from], txObj)
 		}
 		if _, isObserved := bp.observedAddrs[to]; isObserved {
+			L.L.Info("New transaction for", to)
 			bp.transactions[to] = append(bp.transactions[to], txObj)
 		}
 		bp.mu.Unlock()
