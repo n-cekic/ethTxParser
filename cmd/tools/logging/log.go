@@ -4,13 +4,15 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
 var L Logger
 
 type Logger struct {
-	l *log.Logger
+	l  *log.Logger
+	mu *sync.Mutex
 }
 
 func Init() {
@@ -20,7 +22,7 @@ func Init() {
 	}
 
 	l := log.New(os.Stdout, "", 0)
-	L = Logger{l}
+	L = Logger{l, &sync.Mutex{}}
 
 	// ===========================================
 	// NO LOGGING ABOVE THIS LINE
@@ -52,6 +54,9 @@ func (L Logger) Error(msg ...string) {
 }
 
 func (L Logger) print(lvl string, msg ...string) {
+	L.mu.Lock()
+	defer L.mu.Unlock()
+
 	if L.l == nil {
 		panic("uninitialized logger")
 	}
