@@ -11,18 +11,19 @@ import (
 var L Logger
 
 type Logger struct {
-	l  *log.Logger
-	mu sync.Mutex
+	logLevel string
+	l        *log.Logger
+	mu       sync.Mutex
 }
 
-func Init() {
+func Init(logLevel string) {
 	if L.l != nil {
 		L.Warn("Multiple calls to L.Init()")
 		return
 	}
 
 	l := log.New(os.Stdout, "", 0)
-	L = Logger{l, sync.Mutex{}}
+	L = Logger{logLevel, l, sync.Mutex{}}
 
 	// ==========================
 	// NO LOGGING ABOVE THIS LINE
@@ -38,6 +39,7 @@ func (L *Logger) Info(msg ...string) {
 
 	L.print("[INFO]", msg...)
 }
+
 func (L *Logger) Warn(msg ...string) {
 	if len(msg) == 0 {
 		return
@@ -45,6 +47,7 @@ func (L *Logger) Warn(msg ...string) {
 
 	L.print("[WARN]", msg...)
 }
+
 func (L *Logger) Error(msg ...string) {
 	if len(msg) == 0 {
 		return
@@ -53,9 +56,21 @@ func (L *Logger) Error(msg ...string) {
 	L.print("[ERROR]", msg...)
 }
 
+func (L *Logger) Debug(msg ...string) {
+	if len(msg) == 0 {
+		return
+	}
+
+	L.print("[DEBUG]", msg...)
+}
+
 func (L *Logger) print(lvl string, msg ...string) {
 	if L.l == nil {
 		panic("uninitialized logger")
+	}
+
+	if L.logLevel == "info" && lvl == "[DEBUG]" {
+		return
 	}
 
 	L.mu.Lock()
