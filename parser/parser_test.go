@@ -2,7 +2,7 @@ package parser
 
 import (
 	"encoding/json"
-	"ethTx/cmd/tools/logging"
+	"ethTx/cmd/util/logging"
 	"sync"
 	"testing"
 )

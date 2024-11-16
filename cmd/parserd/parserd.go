@@ -1,7 +1,7 @@
 package main
 
 import (
-	"ethTx/cmd/tools/logging"
+	"ethTx/cmd/util/logging"
 	"ethTx/parser"
 	"flag"
 	"time"

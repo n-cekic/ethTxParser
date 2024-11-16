@@ -3,7 +3,7 @@ package parser
 import (
 	"bytes"
 	"encoding/json"
-	L "ethTx/cmd/tools/logging"
+	L "ethTx/cmd/util/logging"
 	"fmt"
 	"net/http"
 	"sync"
