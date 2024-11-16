@@ -3,10 +3,11 @@ package parser
 import (
 	"bytes"
 	"encoding/json"
-	"ethTx/cmd/tools/logging"
+	L "ethTx/cmd/tools/logging"
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 )
 
 type Parser interface {
@@ -27,6 +28,12 @@ type Transaction struct {
 	BlockNumber int    `json:"blockNumber,omitempty"` // Block number in which the transaction was included
 }
 
+type Block struct {
+	Hash         string   `json:"Hash,omitempty"`
+	ParentHash   string   `json:"ParentHash,omitempty"`
+	Transactions []string `json:"Transactions,omitempty"`
+}
+
 type BlockParser struct {
 	currentBlock  int
 	observedAddrs map[string]struct{}
@@ -38,10 +45,11 @@ type BlockParser struct {
 // NewBlockParser creates a new instance of BlockParser.
 func NewBlockParser(rpcURL string) *BlockParser {
 	return &BlockParser{
-		currentBlock:  0,
+		currentBlock:  -1,
 		observedAddrs: make(map[string]struct{}),
 		transactions:  make(map[string][]Transaction),
 		rpcURL:        rpcURL,
+		mu:            sync.Mutex{},
 	}
 }
 
@@ -70,28 +78,127 @@ func (bp *BlockParser) GetTransactions(address string) []Transaction {
 	return bp.transactions[address]
 }
 
-// SynchronizeBlocks starts synchronizing from the current block.
 func (bp *BlockParser) SynchronizeBlocks() {
 	for {
-		nextBlock := bp.GetCurrentBlock() + 1
-		blockData, err := bp.fetchBlock(nextBlock)
+		time.Sleep(time.Second)
+		//get latest block data
+		latestBlockData, err := bp.getLatestBlock()
 		if err != nil {
-			logging.L.Error(fmt.Sprintf("Error fetching block %d: ", nextBlock), err.Error())
-			break
+			L.L.Error("Failed fetching latest block.", "Error:", err.Error())
+			continue
+		} else if latestBlockData == nil {
+			// no new blocks...
+			continue
+		}
+
+		latestBlockParentHash, ok := latestBlockData["parentHash"].(string)
+		if !ok {
+			L.L.Error("Failed casting parent hash to string", fmt.Sprintf("%v", latestBlockData))
+			continue
+		}
+
+		//get present block data
+		currentBlock := bp.GetCurrentBlock()
+		if currentBlock != -1 {
+			blockData, err := bp.getBlockByNumber(currentBlock)
+			if err != nil {
+				L.L.Error("Failed fetching block:", fmt.Sprintf("%d", currentBlock), "Error:", err.Error())
+				continue
+			}
+
+			oldBlockHash, ok := blockData["hash"].(string)
+			if !ok {
+				L.L.Error("Failed casting hash to string", fmt.Sprintf("%v", blockData))
+				continue
+			}
+
+			// Validate chain integrity (optional)
+			if latestBlockParentHash != oldBlockHash {
+				// unhandled reorganization happened
+				L.L.Error("Unhandled block reorg happened. Shutting down...")
+				return
+			}
 		}
 
 		// Process block transactions
-		bp.processBlockTransactions(blockData)
+		bp.processBlockTransactions(latestBlockData)
 
 		// Update the current block
+		latestBlockNoHex, ok := latestBlockData["number"].(string)
+		if !ok {
+			L.L.Error("Failed casting latest block number to string", fmt.Sprintf("%v", latestBlockNoHex))
+			continue
+		}
+		var latestBlockNo int
+		fmt.Sscanf(latestBlockNoHex, "0x%x", &latestBlockNo)
 		bp.mu.Lock()
-		bp.currentBlock = nextBlock
+		bp.currentBlock = latestBlockNo
 		bp.mu.Unlock()
 	}
 }
 
+// getLatestBlock returns latest block data by calling getBlockByNumber(getBlockNumber()).
+//
+// If blockNumber == currentBlocknumber the function returns (nil, nil)
+func (bp *BlockParser) getLatestBlock() (map[string]interface{}, error) {
+	blockNumber, err := bp.getBlockNumber()
+	if err != nil {
+		return nil, err
+	}
+
+	if blockNumber == bp.GetCurrentBlock() {
+		L.L.Info("No new blocks...")
+		return nil, nil
+	}
+	L.L.Info("New block", fmt.Sprintf("%d", blockNumber))
+
+	blockData, err := bp.getBlockByNumber(blockNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	return blockData, nil
+}
+
+// getBlockNumber returns latest block number
+func (bp *BlockParser) getBlockNumber() (int, error) {
+	requestBody := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"method":  "eth_blockNumber",
+		"params":  []interface{}{},
+		"id":      1,
+	}
+	requestData, err := json.Marshal(requestBody)
+	if err != nil {
+		return 0, err
+	}
+
+	resp, err := http.Post(bp.rpcURL, "application/json", bytes.NewReader(requestData))
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	var response map[string]interface{}
+	decoder := json.NewDecoder(resp.Body)
+	err = decoder.Decode(&response)
+	if err != nil {
+		L.L.Error("fetchBlock: failed decoding response body", err.Error())
+		return 0, err
+	}
+
+	blockHexNumber, ok := response["result"].(string)
+	if !ok {
+		return 0, fmt.Errorf("failed casting the 'result' from response: %v", response)
+	}
+
+	var blockNo int
+	fmt.Sscanf(blockHexNumber, "0x%x", &blockNo)
+	return blockNo, nil
+}
+
 // fetchBlock fetches block data using the eth_getBlockByNumber method.
-func (bp *BlockParser) fetchBlock(blockNumber int) (map[string]interface{}, error) {
+func (bp *BlockParser) getBlockByNumber(blockNumber int) (map[string]interface{}, error) {
 	hexBlockNumber := fmt.Sprintf("0x%x", blockNumber) // Convert block number to hex
 	requestBody := map[string]interface{}{
 		"jsonrpc": "2.0",
@@ -115,7 +222,7 @@ func (bp *BlockParser) fetchBlock(blockNumber int) (map[string]interface{}, erro
 	decoder := json.NewDecoder(resp.Body)
 	err = decoder.Decode(&response)
 	if err != nil {
-		logging.L.Error("fetchBlock: failed decoding response body", err.Error())
+		L.L.Error("fetchBlock: failed decoding response body", err.Error())
 		return nil, err
 	}
 
