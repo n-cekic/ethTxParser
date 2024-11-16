@@ -2,6 +2,7 @@ package parser
 
 import (
 	"encoding/json"
+	"ethTx/cmd/tools/logging"
 	"sync"
 	"testing"
 )
@@ -30,6 +31,7 @@ func TestBlockParser_processBlockTransactions(t *testing.T) {
 			}},
 		},
 	}
+	logging.Init("debug")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			bp := &BlockParser{
