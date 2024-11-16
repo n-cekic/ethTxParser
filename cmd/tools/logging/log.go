@@ -12,7 +12,7 @@ var L Logger
 
 type Logger struct {
 	l  *log.Logger
-	mu *sync.Mutex
+	mu sync.Mutex
 }
 
 func Init() {
@@ -22,44 +22,44 @@ func Init() {
 	}
 
 	l := log.New(os.Stdout, "", 0)
-	L = Logger{l, &sync.Mutex{}}
+	L = Logger{l, sync.Mutex{}}
 
-	// ===========================================
+	// ==========================
 	// NO LOGGING ABOVE THIS LINE
-	// ===========================================
+	// ==========================
 
 	L.Info("Logging initialized...")
 }
 
-func (L Logger) Info(msg ...string) {
+func (L *Logger) Info(msg ...string) {
+	if len(msg) == 0 {
+		return
+	}
+
+	L.print("[INFO]", msg...)
+}
+func (L *Logger) Warn(msg ...string) {
+	if len(msg) == 0 {
+		return
+	}
+
+	L.print("[WARN]", msg...)
+}
+func (L *Logger) Error(msg ...string) {
 	if len(msg) == 0 {
 		return
 	}
 
 	L.print("[ERROR]", msg...)
 }
-func (L Logger) Warn(msg ...string) {
-	if len(msg) == 0 {
-		return
-	}
 
-	L.print("[ERROR]", msg...)
-}
-func (L Logger) Error(msg ...string) {
-	if len(msg) == 0 {
-		return
-	}
-
-	L.print("[ERROR]", msg...)
-}
-
-func (L Logger) print(lvl string, msg ...string) {
-	L.mu.Lock()
-	defer L.mu.Unlock()
-
+func (L *Logger) print(lvl string, msg ...string) {
 	if L.l == nil {
 		panic("uninitialized logger")
 	}
+
+	L.mu.Lock()
+	defer L.mu.Unlock()
 
 	timeNow := time.Now().Format(time.RFC822Z)
 	sb := strings.Builder{}
