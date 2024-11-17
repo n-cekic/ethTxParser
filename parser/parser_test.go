@@ -21,7 +21,7 @@ func TestBlockParser_processBlockTransactions(t *testing.T) {
 	}{
 		// TODO: Add test cases.
 		{
-			name: "test numero uno",
+			name: "valid transactions",
 			fields: fields{observedAddrs: map[string]int{
 				"0x98c3d3183c4b8a650614ad179a1a98be0a8d6b8e": 1,
 				"0x3a10dc1a145da500d5fba38b9ec49c8ff11a981f": 1,
@@ -45,16 +45,54 @@ func TestBlockParser_processBlockTransactions(t *testing.T) {
 			}
 
 			json.Unmarshal([]byte(block), &tt.args.blockData)
-			bp.processBlockTransactions(tt.args.blockData)
+			err := bp.processBlockTransactions(tt.args.blockData)
+			if err != nil {
+				t.Log("Falied parsing block transactions", err.Error())
+				t.Fail()
+			}
 
-			for addr, noOfTx := range tt.fields.observedAddrs {
-				if len(bp.transactions[addr]) != noOfTx {
-					t.Log(addr)
+			for addr, wantNoOfTx := range tt.fields.observedAddrs {
+				hasNoOfTx := len(bp.transactions[addr])
+				if len(bp.transactions[addr]) != wantNoOfTx {
+					t.Log("Address:", addr, "should have", wantNoOfTx, "has", hasNoOfTx)
 					t.Fail()
 				}
 			}
 
 		})
+	}
+}
+
+func TestBlockParser_processBlockTransactions_Error_Handling(t *testing.T) {
+	logging.Init("debug")
+
+	bp := &BlockParser{
+		mu:            sync.Mutex{},
+		transactions:  make(map[string][]Transaction),
+		observedAddrs: make(map[string]struct{}),
+	}
+
+	var blockData map[string]interface{}
+	json.Unmarshal([]byte(block), &blockData)
+
+	result, ok := blockData["result"].(map[string]interface{})
+	if !ok {
+		t.Log("Bad test data: no result in block data")
+		t.FailNow()
+	}
+
+	delete(result, "transactions")
+	err := bp.processBlockTransactions(blockData)
+	if err != nil && err.Error() != "failed parsing block.result transactions field" {
+		t.Log("Expected 'failed parsing block.result transactions field', but", err, "returned")
+		t.Fail()
+	}
+
+	delete(blockData, "result")
+	err = bp.processBlockTransactions(blockData)
+	if err != nil && err.Error() != "failed parsing block data result field" {
+		t.Log("Expected 'failed parsing block data result field', but", err, "returned")
+		t.Fail()
 	}
 }
 
