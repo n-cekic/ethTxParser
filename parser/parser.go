@@ -120,7 +120,7 @@ func (bp *BlockParser) SynchronizeBlocks() {
 				continue
 			}
 
-			// Validate chain integrity (optional)
+			// Validate chain integrity
 			if latestBlockParentHash != oldBlockHash {
 				// unhandled reorganization happened
 				L.L.Error("Unhandled block reorg happened. Shutting down...")
@@ -129,8 +129,10 @@ func (bp *BlockParser) SynchronizeBlocks() {
 		}
 
 		// Process block transactions
-		bp.processBlockTransactions(latestBlockData)
-
+		err = bp.processBlockTransactions(latestBlockData)
+		if err != nil {
+			L.L.Error("Processing transactions from block failed:", err.Error())
+		}
 		// Update the current block
 		latestBlockNoHex, ok := latestBlockData["number"].(string)
 		if !ok {
@@ -256,18 +258,16 @@ func (bp *BlockParser) getBlockByNumber(blockNumber int) (map[string]interface{}
 }
 
 // processBlockTransactions processes transactions in a block and stores relevant ones.
-func (bp *BlockParser) processBlockTransactions(blockData map[string]interface{}) {
-
+func (bp *BlockParser) processBlockTransactions(blockData map[string]interface{}) error {
 	result, ok := blockData["result"].(map[string]interface{})
 	if !ok {
-		L.L.Error("Failed parsing block data result field")
-		return
+		return fmt.Errorf("failed parsing block data result field")
+
 	}
 
 	transactions, ok := result["transactions"].([]interface{})
 	if !ok {
-		L.L.Error("Failed parsing block.result transactions field")
-		return
+		return fmt.Errorf("failed parsing block.result transactions field")
 	}
 
 	for _, tx := range transactions {
@@ -304,4 +304,5 @@ func (bp *BlockParser) processBlockTransactions(blockData map[string]interface{}
 		}
 		bp.mu.Unlock()
 	}
+	return nil
 }
