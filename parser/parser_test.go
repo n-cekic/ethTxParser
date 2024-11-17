@@ -96,8 +96,7 @@ func TestBlockParser_processBlockTransactions_Error_Handling(t *testing.T) {
 	}
 }
 
-var block = `
-{
+var block = `{
     "jsonrpc": "2.0",
     "result": {
         "baseFeePerGas": "0x296e6658a",
@@ -4657,4 +4656,5 @@ var block = `
         "withdrawalsRoot": "0xcaa44530978ffa22387d9702509d4da905b96b2456b885152e43b4c083bc7119"
     },
     "id": 1
-}`
+}
+`
