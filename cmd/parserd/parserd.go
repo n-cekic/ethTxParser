@@ -20,6 +20,8 @@ func main() {
 	flag.Parse()
 
 	L.Init(*logLevel)
+	L.L.Warn(`This service is (due to the requrements specification) 
+			meant toonly work with block numbers that can be represented as int (64bit)`)
 
 	svc := parser_rest.Init(*port, *rpcURL, *parseInterval)
 	svc.Start()
