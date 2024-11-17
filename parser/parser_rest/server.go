@@ -47,7 +47,7 @@ func (srv *Server) registerRoutes() {
 
 	srv.router.Handle("GET /block", http.HandlerFunc(srv.getBlockHandler))
 	srv.router.Handle("POST /subscribe", http.HandlerFunc(srv.subscribeHandler))
-	srv.router.Handle("GET /address/{id}", http.HandlerFunc(srv.getTransactionsHandler))
+	srv.router.Handle("GET /address/{address}", http.HandlerFunc(srv.getTransactionsHandler))
 }
 
 func (srv *Server) getBlockHandler(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +70,7 @@ func (srv *Server) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ok := srv.bp.Subscribe(req.Address); !ok {
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode("That didn't work")
 		return
 	}
@@ -81,7 +81,7 @@ func (srv *Server) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 
 func (srv *Server) getTransactionsHandler(w http.ResponseWriter, r *http.Request) {
 
-	address := r.PathValue("id")
+	address := r.PathValue("address")
 
 	transactions := srv.bp.GetTransactions(address)
 	resp := getTransactionsForAddressResponse{Transactions: transactions}
