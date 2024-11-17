@@ -6,8 +6,7 @@ import (
 	L "ethTx/cmd/util/logging"
 	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
+	"regexp"
 	"sync"
 	"time"
 )
@@ -98,12 +97,8 @@ func (bp *BlockParser) Subscribe(address string) bool {
 }
 
 func validAddress(s string) bool {
-	// Strip the "0x" or "0X" prefix before parsing
-	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
-		s = s[2:]
-	}
-	_, err := strconv.ParseInt(s, 16, 64)
-	return err == nil
+	re := regexp.MustCompile(`^0[xX][0-9a-fA-F]+$|^[0-9a-fA-F]+$`)
+	return re.MatchString(s)
 }
 
 // GetTransactions returns a list of inbound or outbound transactions for an address.
