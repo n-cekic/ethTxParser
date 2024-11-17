@@ -6,6 +6,8 @@ import (
 	L "ethTx/cmd/util/logging"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -61,6 +63,12 @@ func NewBlockParser(rpcURL string, parseInterval time.Duration) *BlockParser {
 		mu:      sync.Mutex{},
 		running: true,
 	}
+}
+
+// WithStorage is used to set storage
+func (bp *BlockParser) WithStorage(s Storage) *BlockParser {
+	bp.store = s
+	return bp
 }
 
 // GetCurrentBlock returns the last parsed block.
