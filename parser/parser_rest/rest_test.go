@@ -158,7 +158,7 @@ func TestGetTransactionsHandler(t *testing.T) {
 	srv := Server{bp: bp}
 
 	req := httptest.NewRequest(http.MethodGet, "/address/0x1", nil)
-	req.SetPathValue("id", "0x1")
+	req.SetPathValue("address", "0x1")
 	rec := httptest.NewRecorder()
 
 	srv.getTransactionsHandler(rec, req)
