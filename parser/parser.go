@@ -19,7 +19,7 @@ type Parser interface {
 	GetTransactions(address string) []Transaction
 }
 
-// Transacton is minimal (shortened) structure describing single transaction
+// Transacton is a minimal required (shortened) structure describing single transaction
 type Transaction struct {
 	Hash        string `json:"hash,omitempty"`        // Transaction hash
 	From        string `json:"from,omitempty"`        // Sender address
@@ -29,21 +29,20 @@ type Transaction struct {
 	// ...and so on...
 }
 
+// Block is a minimal required (shortened) structure describing single block
 type Block struct {
 	Hash         string   `json:"Hash,omitempty"`
 	ParentHash   string   `json:"ParentHash,omitempty"`
 	Transactions []string `json:"Transactions,omitempty"`
 }
 
+// BlockParser is used to parse and store block transactions
 type BlockParser struct {
 	currentBlock  int
 	parseInterval time.Duration
 	rpcURL        string // URL of the Ethereum JSON-RPC endpoint
-	// observedAddrs map[string]struct{}
-	// transactions  map[string][]Transaction
-
-	store Storage
-	mu    sync.Mutex
+	store         Storage
+	mu            sync.Mutex
 
 	running bool
 }
@@ -307,15 +306,14 @@ func (bp *BlockParser) processBlockTransactions(blockData map[string]interface{}
 		}
 
 		bp.mu.Lock()
+		// Store transaction if address is being observed
 		if bp.store.IsObserved(from) {
 			L.L.Info("New transaction for", from)
 			bp.store.StoreTransactions(from, txObj)
-			// bp.transactions[from] = append(bp.transactions[from], txObj)
 		}
 		if bp.store.IsObserved(to) {
 			L.L.Info("New transaction for", to)
 			bp.store.StoreTransactions(to, txObj)
-			// bp.transactions[to] = append(bp.transactions[to], txObj)
 		}
 		bp.mu.Unlock()
 	}
