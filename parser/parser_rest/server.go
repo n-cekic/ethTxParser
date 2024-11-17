@@ -26,8 +26,14 @@ func Init(port, rpcURL string, parseInterval time.Duration) Server {
 
 func (srv *Server) Start() {
 	go srv.bp.SynchronizeBlocks()
-	L.L.Info("Server listening on port", srv.port)
-	http.ListenAndServe(srv.port, srv.router)
+
+	go func() {
+		err := http.ListenAndServe(srv.port, srv.router)
+		if err != nil {
+			L.L.Error("Server failed", err.Error())
+		}
+	}()
+
 }
 
 func (srv *Server) Stop() {
