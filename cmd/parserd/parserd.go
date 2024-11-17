@@ -1,27 +1,34 @@
 package main
 
 import (
-	"ethTx/cmd/util/logging"
-	"ethTx/parser"
+	L "ethTx/cmd/util/logging"
+	"ethTx/parser/parser_rest"
 	"flag"
+	"os"
+	"os/signal"
 	"time"
 )
 
 var (
 	rpcURL        = flag.String("rpc.URL", "https://ethereum-rpc.publicnode.com", "Node rpc URL")
+	port          = flag.String("port", ":8080", "Port to run the service on")
 	parseInterval = flag.Duration("parse.interval", time.Second, "Interval on which to query for new block")
 	logLevel      = flag.String("log.level", "info", "Logging level: `info` OR `debug`")
 )
 
 func main() {
-	logging.Init(*logLevel)
-	// rpcURL := "https://ethereum-rpc.publicnode.com"
-	parser := parser.NewBlockParser(*rpcURL, *parseInterval)
+	flag.Parse()
 
-	// Subscribe to addresses
-	parser.Subscribe("0x123")
-	parser.Subscribe("0x456")
+	L.Init(*logLevel)
 
-	// Synchronize blocks (runs indefinitely in this example)
-	parser.SynchronizeBlocks()
+	svc := parser_rest.Init(*port, *rpcURL, *parseInterval)
+	svc.Start()
+
+	// shutdown
+	shutdownCh := make(chan os.Signal, 1)
+	signal.Notify(shutdownCh, os.Interrupt)
+	<-shutdownCh
+	L.L.Info("Received interrupt signal. Shutting down gracefully...")
+
+	svc.Stop()
 }
