@@ -22,14 +22,25 @@ func Init(logLevel string) {
 		return
 	}
 
-	l := log.New(os.Stdout, "", 0)
-	L = Logger{logLevel, l, sync.Mutex{}}
-
 	// ==========================
 	// NO LOGGING ABOVE THIS LINE
 	// ==========================
 
+	l := log.New(os.Stdout, "", 0)
+	L = Logger{logLevel, l, sync.Mutex{}}
+
+	L.validateLogLevel()
 	L.Info("Logging initialized...")
+}
+
+func (L *Logger) validateLogLevel() {
+	if L.logLevel == "info" || L.logLevel == "debug" {
+		return
+	} else {
+		L.Warn("Unknown log level", L.logLevel, "defaulting to level'info'")
+		L.logLevel = "info"
+		return
+	}
 }
 
 func (L *Logger) Info(msg ...string) {
