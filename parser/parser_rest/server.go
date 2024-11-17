@@ -71,7 +71,7 @@ func (srv *Server) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 
 	if ok := srv.bp.Subscribe(req.Address); !ok {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode("Already subscribed")
+		json.NewEncoder(w).Encode("That didn't work")
 		return
 	}
 
