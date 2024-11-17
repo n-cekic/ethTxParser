@@ -42,6 +42,8 @@ type BlockParser struct {
 	observedAddrs map[string]struct{}
 	transactions  map[string][]Transaction
 	mu            sync.Mutex
+
+	running bool
 }
 
 // NewBlockParser creates a new instance of BlockParser.
@@ -54,6 +56,7 @@ func NewBlockParser(rpcURL string, parseInterval time.Duration) *BlockParser {
 		transactions:  make(map[string][]Transaction),
 		rpcURL:        rpcURL,
 		mu:            sync.Mutex{},
+		running:       true,
 	}
 }
 
@@ -61,7 +64,7 @@ func NewBlockParser(rpcURL string, parseInterval time.Duration) *BlockParser {
 func (bp *BlockParser) GetCurrentBlock() int {
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
-	L.L.Info("GetCurrentBlock:", fmt.Sprintf("0x%x", bp.currentBlock))
+	L.L.Debug("GetCurrentBlock:", fmt.Sprintf("0x%x", bp.currentBlock))
 	return bp.currentBlock
 }
 
@@ -83,11 +86,16 @@ func (bp *BlockParser) GetTransactions(address string) []Transaction {
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
 	L.L.Info("Getting transactions for:", address)
-	return bp.transactions[address]
+	txs := bp.transactions[address]
+	if txs == nil {
+		return []Transaction{}
+	}
+	return txs
 }
 
 func (bp *BlockParser) SynchronizeBlocks() {
-	for {
+	bp.running = true
+	for bp.running {
 		time.Sleep(bp.parseInterval)
 		//get latest block data
 		latestBlockData, err := bp.getLatestBlock()
@@ -123,8 +131,10 @@ func (bp *BlockParser) SynchronizeBlocks() {
 			// Validate chain integrity
 			if latestBlockParentHash != oldBlockHash {
 				// unhandled reorganization happened
-				L.L.Error("Unhandled block reorg happened. Shutting down...")
-				return
+				// L.L.Error("Unhandled block reorg happened. Shutting down...")
+				// bp.running = false
+				// return
+				panic("Unhandled block reorg happened. Shutting down...")
 			}
 		}
 
@@ -148,6 +158,11 @@ func (bp *BlockParser) SynchronizeBlocks() {
 	}
 }
 
+func (bp *BlockParser) StopSynchronisingBlocks() {
+	L.L.Info("Stopping block synchronizations...")
+	bp.running = false
+}
+
 // getLatestBlock returns latest block data by calling getBlockByNumber(getBlockNumber()).
 //
 // If blockNumber == currentBlocknumber the function returns (nil, nil)
@@ -161,7 +176,7 @@ func (bp *BlockParser) getLatestBlock() (map[string]interface{}, error) {
 		L.L.Debug("No new blocks...")
 		return nil, nil
 	}
-	L.L.Info("Got latest block:", fmt.Sprintf("0x%x", blockNumber))
+	L.L.Info("Got NEW block:", fmt.Sprintf("0x%x", blockNumber))
 
 	blockData, err := bp.getBlockByNumber(blockNumber)
 	if err != nil {
@@ -210,7 +225,7 @@ func (bp *BlockParser) getBlockNumber() (int, error) {
 	var blockNo int
 	fmt.Sscanf(blockHexNumber, "0x%x", &blockNo)
 
-	L.L.Info("New block number:", blockHexNumber, fmt.Sprintf("(int)%d", blockNo))
+	L.L.Debug("Got block number:", blockHexNumber, fmt.Sprintf("(int)%d", blockNo))
 	return blockNo, nil
 }
 
@@ -259,15 +274,9 @@ func (bp *BlockParser) getBlockByNumber(blockNumber int) (map[string]interface{}
 
 // processBlockTransactions processes transactions in a block and stores relevant ones.
 func (bp *BlockParser) processBlockTransactions(blockData map[string]interface{}) error {
-	result, ok := blockData["result"].(map[string]interface{})
+	transactions, ok := blockData["transactions"].([]interface{})
 	if !ok {
-		return fmt.Errorf("failed parsing block data result faield")
-
-	}
-
-	transactions, ok := result["transactions"].([]interface{})
-	if !ok {
-		return fmt.Errorf("failed parsing block.result transactions faield")
+		return fmt.Errorf("failed parsing block.result transactions field")
 	}
 
 	for _, tx := range transactions {
@@ -304,5 +313,6 @@ func (bp *BlockParser) processBlockTransactions(blockData map[string]interface{}
 		}
 		bp.mu.Unlock()
 	}
+	L.L.Info(fmt.Sprintf("Processed %d transactions", len(transactions)))
 	return nil
 }
