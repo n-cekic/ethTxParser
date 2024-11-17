@@ -261,13 +261,13 @@ func (bp *BlockParser) getBlockByNumber(blockNumber int) (map[string]interface{}
 func (bp *BlockParser) processBlockTransactions(blockData map[string]interface{}) error {
 	result, ok := blockData["result"].(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("failed parsing block data result field")
+		return fmt.Errorf("failed parsing block data result faield")
 
 	}
 
 	transactions, ok := result["transactions"].([]interface{})
 	if !ok {
-		return fmt.Errorf("failed parsing block.result transactions field")
+		return fmt.Errorf("failed parsing block.result transactions faield")
 	}
 
 	for _, tx := range transactions {

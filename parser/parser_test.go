@@ -83,15 +83,15 @@ func TestBlockParser_processBlockTransactions_Error_Handling(t *testing.T) {
 
 	delete(result, "transactions")
 	err := bp.processBlockTransactions(blockData)
-	if err != nil && err.Error() != "failed parsing block.result transactions field" {
-		t.Log("Expected 'failed parsing block.result transactions field', but", err, "returned")
+	if err != nil && err.Error() != "failed parsing block.result transactions faield" {
+		t.Log("Expected 'failed parsing block.result transactions faield', but '", err.Error(), "' returned")
 		t.Fail()
 	}
 
 	delete(blockData, "result")
 	err = bp.processBlockTransactions(blockData)
-	if err != nil && err.Error() != "failed parsing block data result field" {
-		t.Log("Expected 'failed parsing block data result field', but", err, "returned")
+	if err != nil && err.Error() != "failed parsing block data result faield" {
+		t.Log("Expected 'failed parsing block data result faield', but '", err.Error(), "' returned")
 		t.Fail()
 	}
 }
