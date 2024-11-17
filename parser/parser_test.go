@@ -96,6 +96,56 @@ func TestBlockParser_processBlockTransactions_Error_Handling(t *testing.T) {
 	}
 }
 
+/*
+============== benchmark data ========================
+no gorutines, loop:      7998	            156470 ns/op	   25358 B/op	     905 allocs/op
+3 gorutines, loop:       6675	            165043 ns/op	   25497 B/op	     909 allocs/op
+12 gorutines, loop:      6253	            175594 ns/op	   26051 B/op	     919 allocs/op
+
+5086	    234528 ns/op	   47871 B/op	    1557 allocs/op
+*/
+func Benchmark(b *testing.B) {
+	logging.Init("debug")
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		bp := &BlockParser{
+			mu:            sync.Mutex{},
+			transactions:  make(map[string][]Transaction),
+			observedAddrs: make(map[string]struct{}),
+		}
+
+		observedAddrs := map[string]int{
+			"0x98c3d3183c4b8a650614ad179a1a98be0a8d6b8e": 1,
+			"0x3a10dc1a145da500d5fba38b9ec49c8ff11a981f": 1,
+			"0xdac17f958d2ee523a2206206994597c13d831ec7": 12,
+			"0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce": 2,
+			"0xe5901847b5191fce33cef4260d9a0c06b819fc3d": 1,
+		}
+
+		for addr := range observedAddrs {
+			bp.Subscribe(addr)
+		}
+
+		var blockData map[string]interface{}
+		json.Unmarshal([]byte(block), &blockData)
+
+		b.StartTimer()
+		bp.processBlockTransactions(blockData)
+		// if err != nil {
+		// 	b.Log("Falied parsing block transactions", err.Error())
+		// 	b.Fail()
+		// }
+
+		// for addr, wantNoOfTx := range observedAddrs {
+		// 	hasNoOfTx := len(bp.transactions[addr])
+		// 	if len(bp.transactions[addr]) != wantNoOfTx {
+		// 		b.Log("Address:", addr, "should have", wantNoOfTx, "has", hasNoOfTx)
+		// 		b.Fail()
+		// 	}
+		// }
+	}
+}
+
 var block = `
 {
     "jsonrpc": "2.0",

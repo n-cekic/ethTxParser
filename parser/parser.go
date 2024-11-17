@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const EXPECTED_NO_OF_TX_PER_BLOCK = 5
+
 type Parser interface {
 	// last parsed block
 	GetCurrentBlock() int
@@ -270,6 +272,31 @@ func (bp *BlockParser) processBlockTransactions(blockData map[string]interface{}
 		return fmt.Errorf("failed parsing block.result transactions faield")
 	}
 
+	// numGoroutines := 16 // Number of goroutines
+
+	// Calculate chunk size
+	// chunkSize := (len(transactions) + numGoroutines - 1) / numGoroutines
+
+	// var wg sync.WaitGroup
+	// ch := make(chan map[string][]Transaction, numGoroutines)
+
+	// for i := 0; i < len(transactions); i += chunkSize {
+	// 	end := i + chunkSize
+	// 	if end > len(transactions) {
+	// 		end = len(transactions)
+	// 	}
+
+	// 	// Increment the WaitGroup counter
+	// 	wg.Add(1)
+
+	// 	// Launch a goroutine to process this chunk
+	// 	go bp.process(transactions[i:end], &wg, ch)
+	// }
+	// wg.Wait()
+	// close(ch)
+
+	// tx := collectTrasactions(ch)
+	// bp.transactions = *tx
 	for _, tx := range transactions {
 		txMap, ok := tx.(map[string]interface{})
 		if !ok {
@@ -305,4 +332,55 @@ func (bp *BlockParser) processBlockTransactions(blockData map[string]interface{}
 		bp.mu.Unlock()
 	}
 	return nil
+}
+
+func (bp *BlockParser) process(transactions []interface{}, wg *sync.WaitGroup, ch chan map[string][]Transaction) {
+	defer wg.Done()
+	accumulatedTx := make(map[string][]Transaction, EXPECTED_NO_OF_TX_PER_BLOCK)
+
+	for _, tx := range transactions {
+		txMap, ok := tx.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		from, _ := txMap["from"].(string)
+		to, _ := txMap["to"].(string)
+		value, _ := txMap["value"].(string)
+		blockNumber, _ := txMap["blockNumber"].(string)
+
+		// Convert block number from hex to int
+		var blockNumberInt int
+		fmt.Sscanf(blockNumber, "0x%x", &blockNumberInt)
+
+		txObj := Transaction{
+			Hash:        txMap["hash"].(string),
+			From:        from,
+			To:          to,
+			Value:       value,
+			BlockNumber: blockNumberInt,
+		}
+
+		// bp.mu.Lock()
+		if _, isObserved := bp.observedAddrs[from]; isObserved {
+			L.L.Info("New transaction for", from)
+			accumulatedTx[from] = append(accumulatedTx[from], txObj)
+		}
+		if _, isObserved := bp.observedAddrs[to]; isObserved {
+			L.L.Info("New transaction for", to)
+			accumulatedTx[to] = append(accumulatedTx[to], txObj)
+		}
+		// bp.mu.Unlock()
+	}
+	ch <- accumulatedTx
+}
+
+func collectTrasactions(ch chan map[string][]Transaction) *map[string][]Transaction {
+	totalTx := make(map[string][]Transaction, EXPECTED_NO_OF_TX_PER_BLOCK)
+	for addrToTxList := range ch {
+		for k, v := range addrToTxList {
+			totalTx[k] = append(totalTx[k], v...)
+		}
+	}
+	return &totalTx
 }
