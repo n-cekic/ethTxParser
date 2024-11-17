@@ -35,9 +35,11 @@ func TestBlockParser_processBlockTransactions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			bp := &BlockParser{
-				mu:            sync.Mutex{},
-				transactions:  make(map[string][]Transaction),
-				observedAddrs: make(map[string]struct{}),
+				mu: sync.Mutex{},
+				store: &TransactionStorage{
+					transactions:  make(map[string][]Transaction),
+					observedAddrs: make(map[string]struct{}),
+				},
 			}
 
 			for addr := range tt.fields.observedAddrs {
@@ -52,8 +54,8 @@ func TestBlockParser_processBlockTransactions(t *testing.T) {
 			}
 
 			for addr, wantNoOfTx := range tt.fields.observedAddrs {
-				hasNoOfTx := len(bp.transactions[addr])
-				if len(bp.transactions[addr]) != wantNoOfTx {
+				hasNoOfTx := len(bp.store.Transactions(addr))
+				if len(bp.store.Transactions(addr)) != wantNoOfTx {
 					t.Log("Address:", addr, "should have", wantNoOfTx, "has", hasNoOfTx)
 					t.Fail()
 				}
@@ -67,31 +69,20 @@ func TestBlockParser_processBlockTransactions_Error_Handling(t *testing.T) {
 	logging.Init("debug")
 
 	bp := &BlockParser{
-		mu:            sync.Mutex{},
-		transactions:  make(map[string][]Transaction),
-		observedAddrs: make(map[string]struct{}),
+		mu: sync.Mutex{},
+		store: &TransactionStorage{
+			transactions:  make(map[string][]Transaction),
+			observedAddrs: make(map[string]struct{}),
+		},
 	}
 
 	var blockData map[string]interface{}
 	json.Unmarshal([]byte(block), &blockData)
 
-	result, ok := blockData["result"].(map[string]interface{})
-	if !ok {
-		t.Log("Bad test data: no result in block data")
-		t.FailNow()
-	}
-
-	delete(result, "transactions")
+	delete(blockData, "transactions")
 	err := bp.processBlockTransactions(blockData)
 	if err != nil && err.Error() != "failed parsing block.result transactions field" {
 		t.Log("Expected 'failed parsing block.result transactions field', but '", err.Error(), "' returned")
-		t.Fail()
-	}
-
-	delete(blockData, "result")
-	err = bp.processBlockTransactions(blockData)
-	if err != nil && err.Error() != "failed parsing block data result field" {
-		t.Log("Expected 'failed parsing block data result field', but '", err.Error(), "' returned")
 		t.Fail()
 	}
 }

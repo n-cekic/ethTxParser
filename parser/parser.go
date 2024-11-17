@@ -39,9 +39,11 @@ type BlockParser struct {
 	currentBlock  int
 	parseInterval time.Duration
 	rpcURL        string // URL of the Ethereum JSON-RPC endpoint
-	observedAddrs map[string]struct{}
-	transactions  map[string][]Transaction
-	mu            sync.Mutex
+	// observedAddrs map[string]struct{}
+	// transactions  map[string][]Transaction
+
+	store Storage
+	mu    sync.Mutex
 
 	running bool
 }
@@ -52,11 +54,13 @@ func NewBlockParser(rpcURL string, parseInterval time.Duration) *BlockParser {
 	return &BlockParser{
 		currentBlock:  -1,
 		parseInterval: parseInterval,
-		observedAddrs: make(map[string]struct{}),
-		transactions:  make(map[string][]Transaction),
-		rpcURL:        rpcURL,
-		mu:            sync.Mutex{},
-		running:       true,
+		store: &TransactionStorage{
+			observedAddrs: make(map[string]struct{}),
+			transactions:  make(map[string][]Transaction),
+		},
+		rpcURL:  rpcURL,
+		mu:      sync.Mutex{},
+		running: true,
 	}
 }
 
@@ -72,11 +76,11 @@ func (bp *BlockParser) GetCurrentBlock() int {
 func (bp *BlockParser) Subscribe(address string) bool {
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
-	if _, exists := bp.observedAddrs[address]; exists {
-		L.L.Warn("Address", address, "is already subscribed")
+
+	if err := bp.store.StoreAddress(address); err != nil {
+		L.L.Warn("Subscribe:", err.Error())
 		return false
 	}
-	bp.observedAddrs[address] = struct{}{}
 	L.L.Info("Address", address, "is now subscribed")
 	return true
 }
@@ -86,7 +90,7 @@ func (bp *BlockParser) GetTransactions(address string) []Transaction {
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
 	L.L.Info("Getting transactions for:", address)
-	txs := bp.transactions[address]
+	txs := bp.store.Transactions(address)
 	if txs == nil {
 		return []Transaction{}
 	}
@@ -303,13 +307,15 @@ func (bp *BlockParser) processBlockTransactions(blockData map[string]interface{}
 		}
 
 		bp.mu.Lock()
-		if _, isObserved := bp.observedAddrs[from]; isObserved {
+		if bp.store.IsObserved(from) {
 			L.L.Info("New transaction for", from)
-			bp.transactions[from] = append(bp.transactions[from], txObj)
+			bp.store.StoreTransactions(from, txObj)
+			// bp.transactions[from] = append(bp.transactions[from], txObj)
 		}
-		if _, isObserved := bp.observedAddrs[to]; isObserved {
+		if bp.store.IsObserved(to) {
 			L.L.Info("New transaction for", to)
-			bp.transactions[to] = append(bp.transactions[to], txObj)
+			bp.store.StoreTransactions(to, txObj)
+			// bp.transactions[to] = append(bp.transactions[to], txObj)
 		}
 		bp.mu.Unlock()
 	}
