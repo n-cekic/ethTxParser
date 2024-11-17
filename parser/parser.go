@@ -76,12 +76,26 @@ func (bp *BlockParser) Subscribe(address string) bool {
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
 
+	if !validAddress(address) {
+		L.L.Warn("Address", address, "is not valid hex number")
+		return false
+	}
+
 	if err := bp.store.StoreAddress(address); err != nil {
 		L.L.Warn("Subscribe:", err.Error())
 		return false
 	}
 	L.L.Info("Address", address, "is now subscribed")
 	return true
+}
+
+func validAddress(s string) bool {
+	// Strip the "0x" or "0X" prefix before parsing
+	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
+		s = s[2:]
+	}
+	_, err := strconv.ParseInt(s, 16, 64)
+	return err == nil
 }
 
 // GetTransactions returns a list of inbound or outbound transactions for an address.
