@@ -7,6 +7,28 @@ import (
 	"testing"
 )
 
+func TestValidAddress(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"0x1234567890abcdef1234567890abcdef12345678", true},
+		{"1234567890abcdef1234567890abcdef12345678", false}, // no "0x" prefix
+		{"0X1234567890abcdef1234567890abcdef12345678", true},
+		{"0x", false}, // too short
+		{"", false},   // empty string
+		{"0x1234567890abcdef1234567890abcdef12345678extra", false}, // extra characters after valid hex
+		{"0xG1234567890abcdef1234567890abcdef12345678", false},     // invalid character 'G'
+	}
+
+	for _, test := range tests {
+		result := validAddress(test.input)
+		if result != test.expected {
+			t.Errorf("validAddress(%q) = %v; want %v", test.input, result, test.expected)
+		}
+	}
+}
+
 func TestBlockParser_processBlockTransactions(t *testing.T) {
 	type fields struct {
 		observedAddrs map[string]int

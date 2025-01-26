@@ -17,20 +17,26 @@ var (
 )
 
 func main() {
-	flag.Parse()
+	flag.Parse() // Parses the command-line flags provided by flag.
 
-	L.Init(*logLevel)
+	L.Init(*logLevel) // Initializes logging with the specified log level.
+	// Logs a warning about the service's limitation to handle only block numbers that can be represented as int (64bit).
 	L.L.Warn(`This service is (due to the requrements specification) 
 			meant toonly work with block numbers that can be represented as int (64bit)`)
 
+	// Initializes the service with the provided RPC URL, port, and parse interval.
 	svc := parser_rest.Init(*port, *rpcURL, *parseInterval)
+	// Starts the service.
 	svc.Start()
 
-	// shutdown
+	// Creates a channel to listen for an interrupt signal (e.g., Ctrl+C).
 	shutdownCh := make(chan os.Signal, 1)
+	// Registers the shutdown channel to receive interrupt signals.
 	signal.Notify(shutdownCh, os.Interrupt)
+	// Blocks until an interrupt signal is received.
 	<-shutdownCh
-	L.L.Info("Received interrupt signal. Shutting down gracefully...")
+	L.L.Info("Received interrupt signal. Shutting down gracefully...") // Logs a message when an interrupt signal is received.
 
+	// Stops the service gracefully.
 	svc.Stop()
 }

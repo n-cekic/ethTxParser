@@ -96,8 +96,9 @@ func (bp *BlockParser) Subscribe(address string) bool {
 	return true
 }
 
+// validAddress checks if the given string is a valid Ethereum address in hex format.
 func validAddress(s string) bool {
-	re := regexp.MustCompile(`^0[xX][0-9a-fA-F]+$|^[0-9a-fA-F]+$`)
+	re := regexp.MustCompile(`^0[xX][0-9a-fA-F]+$`)
 	return re.MatchString(s)
 }
 
